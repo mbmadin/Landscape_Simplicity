@@ -1,0 +1,348 @@
+---
+title: "Soil Data Extraction Codes"
+author: "Michael Madin & Kate Nelson"
+date: "2022-11-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo= TRUE, message= FALSE, warning= FALSE, cache= FALSE)
+```
+
+
+# Required packages 
+```{r }
+library(tidyverse)
+library(lme4) # for modeling linear mixed effect
+library(lmerTest) # for p-values for lmer
+library(sjPlot) # for printing model output
+library(sjmisc) # for printing model output
+library(sjlabelled) # For printing model output
+library(summarytools) # For summary stats
+library(sjstats) # estimate partial effect size
+library(ggplot2)
+library(kableExtra)
+library(INLA) # For Bayesian modeling using integrated nested laplace approximations
+library(tmap) #Thematic mapper
+library(sf)
+library(raster)
+library(stars)
+library(sp)
+library(exactextractr) # for faster raster data extraction
+library(readxl)
+library(tibble) # Rearrange the columns
+library(s2) # For buffering unprojected geometry
+```
+
+
+###Importing the data and shape file
+```{r}
+# Regions location
+Location1<- st_read("~/R01_Course_Files/Cities_Update.shp")
+
+# Regions Area and Length
+Areas_Regions <- read_excel("C:/Users/madin/OneDrive - Kansas State University/Madin/Landscape Data/Scripts/Areas_Regions.xlsx")
+
+# Soil data
+Soil_Data<- readRDS("~/R01_Course_Files/GRA/HWSD_data.rds")
+
+Soil_raster<- raster("~/R01_Course_Files/GRA/hwsd.bil")
+
+# Global shapefiles
+World<- st_read("~/R01_Course_Files/GRA/World_Countries__Generalized_.shp")
+
+# Load rasterized data
+TSusda_tex2<- raster("C:/Users/madin/OneDrive - Kansas State University/Madin/Landscape Data/Scripts/TSusda_tex2.tif")
+
+Subsoil_OC<- raster("C:/Users/madin/OneDrive - Kansas State University/Madin/Landscape Data/Scripts/Subsoil_OC.tif")
+
+Topsoil_OC<- raster("C:/Users/madin/OneDrive - Kansas State University/Madin/Landscape Data/Scripts/Topsoil_OC.tif")
+
+Soil_NDat<- readRDS("C:/Users/madin/OneDrive - Kansas State University/Madin/Landscape Data/Scripts/Locations_Nsoil.rds")
+```
+
+
+### Add Area and length of Regions
+```{r }
+# Combine data
+LocationsR<- left_join(Areas_Regions, Location1, by= ("Name"))
+  
+# rearrange columns
+LocationsR<- LocationsR[, c(1, 2, 5, 3, 4, 6, 7, 8)]
+
+# Convert into sf dataframe
+LocationsR_sf<- st_as_sf(LocationsR, coords = c("X", "Y"), crs= 4326)
+```
+
+
+### Create buffer for Regions
+
+```{r }
+
+# Create buffer for unprojected coordinates
+Locations_RB = s2_buffer_cells(LocationsR_sf, distance = (LocationsR$length_M))
+
+# Convert into sf dataframe
+LocationsRB_sf<- st_as_sf(Locations_RB, crs = st_crs(4326))
+
+# join the polygon geometry to region location data
+LocationsRB_sf<- st_join(LocationsRB_sf, LocationsR_sf)
+```
+
+# Plot
+```{r}
+ggplot() + geom_sf(data = World) +
+  geom_sf(data=LocationsRB_sf, aes(color=length_M, size=length_M)) + 
+  ggtitle("Region length_M")+
+  theme_minimal()+
+   geom_sf_text(data=LocationsRB_sf, aes(label= Region), size= 2.5)
+ 
+
+
+```
+
+
+###Projection of the soil raster file
+```{r eval=FALSE, include=TRUE}
+proj4string(Soil_raster) <-"+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
+str(Soil_raster)
+```
+
+
+###Joining Top soil USDA texture class from raster data file to the list by MU_GLOBAL id
+```{r eval=FALSE, include=TRUE}
+
+TSusda_tex2 <- subs(Soil_raster, Soil_Data %>% 
+                  dplyr::select(MU_GLOBAL, T_USDA_TEX_CLASS) %>% 
+                    arrange(desc(T_USDA_TEX_CLASS)) %>%
+                  dplyr::distinct(MU_GLOBAL, .keep_all=TRUE), by="MU_GLOBAL")
+
+writeRaster(TSusda_tex2, "TSusda_tex2.tif")
+```
+
+
+```{r}
+# Plot soil texture
+
+spplot(TSusda_tex2, main="Top soil texture", col.regions=topo.colors(64),
+       scales=list(draw = TRUE))
+```
+
+
+###Joining Top soil organic carbon from raster data file to the list by MU_GLOBAL id
+```{r eval=FALSE, include=TRUE}
+Topsoil_OC <- subs(Soil_raster, Soil_Data %>% 
+                  dplyr::select(MU_GLOBAL, T_OC) %>% 
+                    arrange(desc(T_OC)) %>%
+                  dplyr::distinct(MU_GLOBAL, .keep_all=TRUE), by="MU_GLOBAL")
+
+ writeRaster(Topsoil_OC, "Topsoil_OC.tif")
+```
+
+
+```{r }
+# Plot Topsoil_OC
+
+spplot(Topsoil_OC, main="Top soil _OC", col.regions=topo.colors(64),
+       scales=list(draw = TRUE))
+```
+
+###Joining Sub soil organic carbon class from raster data file to the list by MU_GLOBAL id
+```{r eval=FALSE, include=TRUE}
+Subsoil_OC <- subs(Soil_raster, Soil_Data %>% 
+                  dplyr::select(MU_GLOBAL, S_OC) %>%
+                    arrange(desc(S_OC)) %>%
+                  dplyr::distinct(MU_GLOBAL, .keep_all=TRUE), by="MU_GLOBAL")
+
+ writeRaster(Subsoil_OC, "Subsoil_OC.tif")
+```
+
+
+```{r}
+# Plot Subsoil_OC
+
+spplot(Subsoil_OC, main="Sub soil _OC", col.regions=topo.colors(64),
+       scales=list(draw = TRUE))
+```
+
+
+###Joining Top soil PH from raster data file to the list by MU_GLOBAL id
+```{r eval=FALSE, include=TRUE}
+Topsoil_PH <- subs(Soil_raster, Soil_Data %>% 
+                  dplyr::select(MU_GLOBAL, T_PH_H2O) %>%
+                    arrange(desc(T_PH_H2O)) %>%
+                  dplyr::distinct(MU_GLOBAL, .keep_all=TRUE), by="MU_GLOBAL")
+
+ writeRaster(Topsoil_PH, "Topsoil_PH.tif")
+```
+
+
+```{r}
+# Plot Topsoil_PH
+
+spplot(Topsoil_PH, main="Top soil _PH", col.regions=topo.colors(64),
+       scales=list(draw = TRUE))
+```
+
+###Joining Sub soil PH from raster data file to the list by MU_GLOBAL id
+```{r eval=FALSE, include=TRUE}
+Subsoil_PH <- subs(Soil_raster, Soil_Data %>% 
+                  dplyr::select(MU_GLOBAL, S_PH_H2O) %>%
+                    arrange(desc(S_PH_H2O)) %>%
+                  dplyr::distinct(MU_GLOBAL, .keep_all=TRUE), by="MU_GLOBAL")
+
+ writeRaster(Subsoil_PH, "Subsoil_PH.tif")
+```
+
+
+```{r}
+# Plot Subsoil_PH
+
+spplot(Subsoil_PH, main="Sub soil _PH", col.regions=topo.colors(64),
+       scales=list(draw = TRUE))
+```
+
+#### Extract the Top soil USDA texture class code
+
+```{r eval=FALSE, include=TRUE}
+# Extract Top soil USDA texture class Using fun = mode
+
+Tusda_texCod<- exact_extract(TSusda_tex2, LocationsRB_sf, fun = "mode",
+                           force_df = TRUE)
+```
+
+### Create a function for calculating percent Top soil USDA texture class code
+
+```{r eval=FALSE, include=TRUE}
+
+# Create a summarizing function 
+
+sum_cover <- function(x){
+  list(x %>%
+    group_by(value) %>%
+    summarize(total_area = sum(coverage_area)) %>%
+    mutate(proportion = (total_area/sum(total_area))*100))}
+
+# Create function
+Extract_PLUse<- function(x, y){
+
+## Extract Top soil USDA texture class Using fun = mode
+
+Tusda_texCodp<- exact_extract(x, y, coverage_area = TRUE, summarize_df = TRUE,
+                                fun = sum_cover)
+
+
+## add unique ID  to the elements of the output list
+names(Tusda_texCodp) <- LocationsRB_sf$Area_SqKm
+
+#merge the list elements into a df
+Tusda_texCodPer <- bind_rows(Tusda_texCodp, .id = "Plot_buffer")
+
+# Rename the columns
+names(Tusda_texCodPer)<- c("Area_SqKm", "Tusda_texCod", "total_area", "Percent_TCod")
+
+## Save extracted data
+return(Tusda_texCodPer)
+
+}
+
+# Run function
+Tusda_texCodPer<- Extract_PLUse(TSusda_tex2, LocationsRB_sf)
+
+# Save Data
+write.csv(Tusda_texCodPer, "Tusda_texCodPer.csv")
+```
+
+#### Extract Top soil organic carbon
+
+```{r eval=FALSE, include=TRUE}
+# Extract Top soil organic carbon Using fun = mean
+Tsoil_OC<- exact_extract(Topsoil_OC, LocationsRB_sf, fun = "mean",
+                           force_df = TRUE)
+
+```
+
+
+#### Extract sub soil organic carbon
+
+```{r eval=FALSE, include=TRUE}
+# Extract sub soil organic carbon Using fun = mean
+Ssoil_OC<- exact_extract(Subsoil_OC, LocationsRB_sf, fun = "mean",
+                           force_df = TRUE)
+```
+
+
+# Merge soil data with the study sites
+```{r eval=FALSE, include=TRUE}
+Soil_NDat<- cbind(LocationsRB_sf, Tsoil_OC, Ssoil_OC, Tusda_texCod)
+
+```
+
+
+###Adding USDA texture class names by the codes in Soil_dat
+the names and codes are provided in https://www.fao.org/3/aq361e/aq361e.pdf
+
+```{r eval=FALSE, include=TRUE}
+# Add actual land use for 2021 into extracted data
+  Soil_NDat<- Soil_NDat%>% 
+  mutate(Tsusda_Tex= 1,
+         Tsusda_Tex= ifelse(mode== 9,  "loam", Tsusda_Tex),
+         Tsusda_Tex= ifelse(mode== 11,  "sandy loam", Tsusda_Tex),
+         Tsusda_Tex= ifelse(mode== 10,  "sandy clay loam", Tsusda_Tex),
+         Tsusda_Tex= ifelse(mode== 12,  "Loamy Sand", Tsusda_Tex),
+         Tsusda_Tex= ifelse(mode== 13,  "Sand", Tsusda_Tex),
+         Tsusda_Tex= ifelse(mode== 3,  "clay", Tsusda_Tex))
+
+# rearrange columns
+Soil_NDat<- Soil_NDat1[, c(1:8, 10, 9)]
+```
+
+
+#Rename the columns
+```{r eval=FALSE, include=TRUE}
+names(Soil_NDat)<- c("Name", "Region", "Country", "Area_SqKm", "length_M",
+                     "Tsoil_OC", "Ssoil_OC", "Tusda_texCode", "Tusda_texName",
+                     "geometry")
+
+# Convert to dataframe
+Soil_NDat<- as.data.frame(Soil_NDat)
+
+```
+
+# Save data
+```{r eval=FALSE, include=TRUE}
+# Export data
+saveRDS(Soil_NDat, "Locations_Nsoil.rds")
+
+write.csv(Soil_NDat, "Locations_Nsoil.csv")
+```
+
+#Maps of soil data
+```{r}
+
+ggplot() + geom_sf(data = World) +
+  geom_sf(data= Soil_NDat, aes(fill= as.factor(Tusda_texCode), size= as.factor(Tusda_texCode)))+
+  ggtitle("USDA Top Soil Texture")+
+  theme_minimal()
+
+tm_shape(World) +
+    tm_fill("COUNTRY", col= NA, alpha = NA)+
+  tm_shape(Soil_NDat) +
+    tm_bubbles("Tsoil_OC", title.size = "% OC", col = "black", 
+             border.col = "black", border.alpha = .5) +
+  tm_layout(legend.outside = TRUE, frame = FALSE,
+            inner.margins = c(.2, .05, .05, .05),
+            main.title = "Percent Top Soil Organic Carbon")
+
+tm_shape(World) +
+    tm_fill("COUNTRY", col= NA, alpha = NA)+
+  tm_shape(Soil_NDat) +
+    tm_bubbles("Ssoil_OC", title.size = "% OC", col = "black", 
+             border.col = "black", border.alpha = .5) +
+  tm_layout(legend.outside = TRUE, frame = FALSE,
+            inner.margins = c(.2, .05, .05, .05),
+            main.title = "Percent Sub Soil Organic Carbon")
+```
+
+
+

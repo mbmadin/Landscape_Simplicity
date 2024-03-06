@@ -5,6 +5,7 @@ date: "2022-11-10"
 output: html_document
 ---
 
+This is the codes for the published article. Effects of landscape simplicity on crop yields: A reanalysis of global dataset. Cite this codes as Madin, M. B., & Nelson, K. S. (2023). Effects of landscape simplicity on crop yield: A reanalysis of a global database. Plos one, 18(12), e0289799. Or access the publication at https://doi.org/10.1371/journal.pone.0289799
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo= TRUE, message= FALSE, warning= FALSE, cache= FALSE)
@@ -13,34 +14,27 @@ knitr::opts_chunk$set(echo= TRUE, message= FALSE, warning= FALSE, cache= FALSE)
 
 # Required packages 
 ```{r }
-library(tidyverse)
-library(lme4) # for modeling linear mixed effect
-library(lmerTest) # for p-values for lmer
-library(sjPlot) # for printing model output
-library(sjmisc) # for printing model output
-library(sjlabelled) # For printing model output
+library(tidyverse)  # For processing simple files 
 library(summarytools) # For summary stats
-library(sjstats) # estimate partial effect size
-library(ggplot2)
-library(kableExtra)
-library(INLA) # For Bayesian modeling using integrated nested laplace approximations
-library(tmap) #Thematic mapper
-library(sf)
-library(raster)
-library(stars)
-library(sp)
+library(sjstats)    # estimate partial effect size
+library(ggplot2)    # For making plots
+library(kableExtra) # For creating tables
+library(sf)         # For processing shape files (sf) objects
+library(raster)     # For processing raster objects
+library(sp)         # For handling large raster files
 library(exactextractr) # for faster raster data extraction
-library(readxl)
-library(tibble) # Rearrange the columns
-library(s2) # For buffering unprojected geometry
+library(readxl)       # For loading excel files
+library(s2)           # For buffering un-projected geometry
 ```
 
+# Load required data files
 ```{r}
-# Load new study locations data
-LocationsRB_sf<- readRDS("C:/Users/madin/OneDrive - Kansas State University/Madin/Landscape Data/Scripts/Locations_Nsoil.rds")
+# Load experimental study or region locations coordinate data
+LocationsRB_sf<- readRDS("~/R01_Course_Files/GRA/Locations_Nsoil.rds")
 
 # Load stacked monthly precipitation data [January to December]
-# Study years  c(2005, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016)
+
+## Study years  c(2005, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016)
 BrickP2005<- raster("~/R01_Course_Files/GRA/BrickP2005.tif")
 
 BrickP2007<- raster("~/R01_Course_Files/GRA/BrickP2007.tif")
@@ -63,7 +57,8 @@ BrickP2015<- raster("~/R01_Course_Files/GRA/BrickP2015.tif")
 
 BrickP2016<- raster("~/R01_Course_Files/GRA/BrickP2016.tif")
 
-# Load stacked monthly max temperature data [January to December]
+
+# Load stacked monthly max. temperature data [January to December]
 BrickTmax2005<- raster("~/R01_Course_Files/GRA/BrickTmax2005.tif")
 
 BrickTmax2007<- raster("~/R01_Course_Files/GRA/BrickTmax2007.tif")
@@ -86,7 +81,8 @@ BrickTmax2015<- raster("~/R01_Course_Files/GRA/BrickTmax2015.tif")
 
 BrickTmax2016<- raster("~/R01_Course_Files/GRA/BrickTmax2016.tif")
 
-# Load stacked monthly min temperature data [January to December]
+
+# Load stacked monthly min. temperature data [January to December]
 BrickTmin2005<- raster("~/R01_Course_Files/GRA/BrickTmin2005.tif")
 
 BrickTmin2007<- raster("~/R01_Course_Files/GRA/BrickTmin2007.tif")
@@ -110,33 +106,36 @@ BrickTmin2015<- raster("~/R01_Course_Files/GRA/BrickTmin2015.tif")
 BrickTmin2016<- raster("~/R01_Course_Files/GRA/BrickTmin2016.tif")
 ```
 
+# Extract Climate Variables
 
-### Create a function for Extraction
+
+## Create a function for data extraction
+
 ```{r eval=FALSE, include=TRUE}
-# Create function for mean
+# Create function for extracting the mean data point
+
 Extract_Data<- function(x, y){
 
-# Extract climate variable Using fun = mean
-Extract_CDat<- exact_extract(x, y, fun = "mean", force_df = TRUE)
-
-# Add regions of extraction
+Extract_CDat<- exact_extract(x, y, fun = "mean", force_df = TRUE) ## extract into data frame
 
 Extract_CDat<- Extract_CDat%>%
-  mutate(Region= y$Region) 
+  mutate(Region= y$Region)    ## Add unique ID of region of study location
 
-## Save extracted data
-return(Extract_CDat)
+return(Extract_CDat)        ## Save extracted data into the environment
 
 }
 ```
 
 
-# Exract Annual precipitation
-Precipitation in Karnataka: Kodagu region is low. But this is consistent with literature. https://www.ceicdata.com/en/india/rainfall-by-district/rainfall-karnataka-kodagu-normal 
+### Exract Annual precipitation
+
+This extract precipitation from the brick raster file *(BrickP2005)* using the shapefile with study locations *(LocationsRB_sf)*
+
 ```{r eval=FALSE, include=TRUE}
 # Extract for 2005
-Precip_2005<- Extract_Data(BrickP2005, LocationsRB_sf)%>%
-  mutate(Year= 2005)%>% rename(Precip= mean)
+Precip_2005<- Extract_Data(BrickP2005, LocationsRB_sf)%>% ## Extract with built function
+  mutate(Year= 2005)%>%  ## Create a column to specify the year of precipitation
+  rename(Precip= mean)   ## Rename the extracted value column
 
 # Extract for 2007
 Precip_2007<- Extract_Data(BrickP2007, LocationsRB_sf)%>%
@@ -179,11 +178,16 @@ Precip_2016<- Extract_Data(BrickP2016, LocationsRB_sf)%>%
   mutate(Year= 2016)%>% rename(Precip= mean)
 ```
 
-# Exract Annual Max Temperature
+
+### Exract Annual Max Temperature
+
+This extract maximum temperature from the brick raster file *(BrickTmax2005)* using the shapefile with study locations *(LocationsRB_sf)*
+
 ```{r eval=FALSE, include=TRUE}
 # Extract for 2005
-Tmax_2005<- Extract_Data(BrickTmax2005, LocationsRB_sf)%>%
-  mutate(Year= 2005)%>% rename(Tmax= mean)
+Tmax_2005<- Extract_Data(BrickTmax2005, LocationsRB_sf)%>%  ## Extract with built function
+  mutate(Year= 2005)%>%  ## Create a column to specify the year of precipitation
+  rename(Tmax= mean)     ## Rename the extracted value column
 
 # Extract for 2007
 Tmax_2007<- Extract_Data(BrickTmax2007, LocationsRB_sf)%>%
@@ -227,11 +231,15 @@ Tmax_2016<- Extract_Data(BrickTmax2016, LocationsRB_sf)%>%
 ```
 
 
-# Exract Annual Min Temperature
+### Exract Annual Min Temperature
+
+This extract minimum temperature from the brick raster file *(BrickTmin2005)* using the shapefile with study locations *(LocationsRB_sf)*
+
 ```{r eval=FALSE, include=TRUE}
 # Extract for 2007
-Tmin_2005<- Extract_Data(BrickTmin2005, LocationsRB_sf)%>%
-  mutate(Year= 2005)%>% rename(Tmin= mean)
+Tmin_2005<- Extract_Data(BrickTmin2005, LocationsRB_sf)%>%  ## Extract with built function
+  mutate(Year= 2005)%>%  ## Create a column to specify the year of precipitation
+  rename(Tmin= mean)     ## Rename the extracted value column
 
 # Extract for 2007
 Tmin_2007<- Extract_Data(BrickTmin2007, LocationsRB_sf)%>%
@@ -275,7 +283,10 @@ Tmin_2016<- Extract_Data(BrickTmin2016, LocationsRB_sf)%>%
 ```
 
 
-# Calculate Annual Max of Max Temperature
+### Calculate Annual Maximum of Maximum Monthly Temperature
+
+This calculate the maximum of maximum temperatures from the brick raster files
+
 ```{r eval=FALSE, include=TRUE}
 # Calculate for 2007
 Tmaxmax2005<- calc(BrickTmax2005, fun = max)
@@ -312,7 +323,10 @@ Tmaxmax2016<- calc(BrickTmax2016, fun = max)
 ```
 
 
-# Calculate Annual Min of Min Temperature
+# Calculate Annual Minimum of Minimum Monthly Temperature
+
+This calculate the minimum of minimum temperatures from the brick raster files
+
 ```{r eval=FALSE, include=TRUE}
 # Calculate for 2005
 Tminmin2005<- calc(BrickTmin2005, fun = min)
@@ -349,13 +363,17 @@ Tminmin2016<- calc(BrickTmin2016, fun = min)
 ```
 
 
-# Extract for Max of Max temperature
+### Extract the Maximum of Maximum Monthly temperature
+
+This extract the maximum temperature of the calculated maximum of maximum monthly temperatures 
+
 ```{r eval=FALSE, include=TRUE}
 # Extract for 2005 Using fun = max 
 Tmaxmax_2005<- exact_extract(Tmaxmax2005, LocationsRB_sf, fun = "max", 
-                             force_df = TRUE)%>% mutate(Year= 2005)%>%
-                             rename(Tmmax= max)%>% 
-                             mutate(Region= LocationsRB_sf$Region)
+                             force_df = TRUE)%>%  ## Extract with exact_extract package
+                             mutate(Year= 2005)%>% ## Create a column for the study year 
+                             rename(Tmmax= max)%>%  ## Rename the extracted value column
+                             mutate(Region= LocationsRB_sf$Region) ## Add unique ID 
 
 # Extract for 2007 Using fun = max 
 Tmaxmax_2007<- exact_extract(Tmaxmax2007, LocationsRB_sf, fun = "max", 
@@ -419,13 +437,17 @@ Tmaxmax_2016<- exact_extract(Tmaxmax2016, LocationsRB_sf, fun = "max",
 ```
 
 
-# Extract for Min of Min temperature
+### Extract for Minimum of Minimum Monthly temperatures
+
+This extract the maximum temperature of the calculated maximum of maximum monthly temperatures
+
 ```{r eval=FALSE, include=TRUE}
 # Extract for 2005 Using fun = min 
 Tminmin_2005<- exact_extract(Tminmin2005, LocationsRB_sf, fun = "min", 
-                             force_df = TRUE)%>% mutate(Year= 2005)%>%
-                             rename(Tmmin= min)%>% 
-                             mutate(Region= LocationsRB_sf$Region)
+                             force_df = TRUE)%>%  ## Extract with exact_extract package
+                             mutate(Year= 2005)%>% ## Create a column for the study year 
+                             rename(Tmmin= min)%>%  ## Rename the extracted value column
+                             mutate(Region= LocationsRB_sf$Region) ## Add unique ID 
 
 # Extract for 2007 Using fun = min 
 Tminmin_2007<- exact_extract(Tminmin2007, LocationsRB_sf, fun = "min", 
@@ -488,10 +510,13 @@ Tminmin_2016<- exact_extract(Tminmin2016, LocationsRB_sf, fun = "min",
                              mutate(Region= LocationsRB_sf$Region)
 ```
 
-# Merge data
+## Merge the Extracted Climate Data
+
+### Combine Individual Climate Variables
+
 ```{r eval=FALSE, include=TRUE}
 
-# Row bin precipitation data
+# Row bin all extracted precipitation data
 Annaul_Precip<- rbind(Precip_2005, Precip_2007, Precip_2008,
                       Precip_2009,
                       Precip_2010, 
@@ -499,21 +524,21 @@ Annaul_Precip<- rbind(Precip_2005, Precip_2007, Precip_2008,
                       Precip_2015, Precip_2016)%>%
                              rename(StudyYear= Year)
 
-# Row bin Max Temperature data
+# Row bin all extracted max. temperature data
 Annaul_Tmax<- rbind(Tmax_2005, Tmax_2007, Tmax_2008, Tmax_2009,
                     Tmax_2010,
                     Tmax_2011,
                     Tmax_2012, Tmax_2013, Tmax_2014, Tmax_2015, Tmax_2016)%>%
                              rename(StudyYear= Year)
 
-# Row bin Min Temperature data
+# Row bin all extracted Min. temperature data
 Annaul_Tmin<- rbind(Tmin_2005, Tmin_2007, Tmin_2008, Tmin_2009,
                     Tmin_2010,
                     Tmin_2011,
                     Tmin_2012, Tmin_2013, Tmin_2014, Tmin_2015, Tmin_2016)%>%
                              rename(StudyYear= Year)
 
-# Row bin Max of Max Temperature data
+# Row bin max. of max. monthly temperature data
 Annaul_Tmaxmax<- rbind(Tmaxmax_2005, Tmaxmax_2007, Tmaxmax_2008,
                        Tmaxmax_2009,
                        Tmaxmax_2010,
@@ -521,7 +546,7 @@ Annaul_Tmaxmax<- rbind(Tmaxmax_2005, Tmaxmax_2007, Tmaxmax_2008,
                        Tmaxmax_2015, Tmaxmax_2016)%>%
                              rename(StudyYear= Year)
 
-# Row bin Max of Max Temperature data
+# Row bin Min. of Min. temperature data
 Annaul_Tminmin<- rbind(Tminmin_2005, Tminmin_2007, Tminmin_2008,
                        Tminmin_2009,
                        Tminmin_2010,
@@ -530,75 +555,49 @@ Annaul_Tminmin<- rbind(Tminmin_2005, Tminmin_2007, Tminmin_2008,
                              rename(StudyYear= Year)
 ```
 
-# Drop years for now
+
+### Import crop yield data from Dainese et al. (2019)
+
 ```{r eval=FALSE, include=TRUE}
-# Drop columns containing years
-GRA_NSoilClimD<- GRA_NSoilClimD%>%
-  select(-contains('Year'))
-
-GRA_NSoilClimD<- as.data.frame(GRA_NSoilClimD)
-```
-
-# Save data
-```{r eval=FALSE, include=TRUE}
-# Write to csv
-write.csv(GRA_NSoilClimD, "GRA_NSoilClimD.csv")
-
-# Write to RDS
-saveRDS(GRA_NSoilClimD, "New_SoilClimD.rds")
-```
-
-
-# Import production data
-```{r eval=FALSE, include=TRUE}
-Merg_PRODR<- read_csv("~/R01_Course_Files/GRA/Merg_PROD-new.csv")%>%
+# Load data
+Merg_PRODR<- read_csv("~/R01_Course_Files/GRA/Crop_PROD.csv")%>%
   select(StudyID:POLL_IND)%>% 
   mutate(StudyYear= ifelse(Country.x== "tanzania",  2011, StudyYear),
          StudyYear= ifelse(Country.x== "Brazil",  2015, StudyYear))
 ```
 
 
-# Merge Climate and soil data and production data
+### Merge Climate and soil data and production data
+
 ```{r eval=FALSE, include=TRUE}
-# Merge precip
+# Merge precipitation values to crop yield
 Merg_PRODNn<- left_join(Merg_PRODR, Annaul_Precip, 
                         by= c("StudyYear", "Region"))
 
-# Merge Tmax
+# Merge maximum temperature values to crop yield
 Merg_PRODNn<- left_join(Merg_PRODNn, Annaul_Tmax, 
                         by= c("StudyYear", "Region"))
 
-# Merge Tmin
+# Merge minimum temperature values to crop yield
 Merg_PRODNn<- left_join(Merg_PRODNn, Annaul_Tmin, 
                         by= c("StudyYear", "Region"))
 
-# Merge Tmaxmax
+# Merge maximum of maximum monthly temperature values to crop yield
 Merg_PRODNn<- left_join(Merg_PRODNn, Annaul_Tmaxmax, 
                         by= c("StudyYear", "Region"))
 
-# Merge Tminmin
+# Merge minimum of minimum monthly temperature values to crop yield
 Merg_PRODNn<- left_join(Merg_PRODNn, Annaul_Tminmin, 
                         by= c("StudyYear", "Region"))
 
-# Get only soil variables
-New_soilData<- LocationsRB_sf%>%
-  select(Region, Tsoil_OC: Tusda_texName)
-
-# Merge Soil data
-Merg_PRODNn<- left_join(Merg_PRODNn, New_soilData, 
-                        by= c("Region"))
-
-# Drop goemetry column
+# Drop geometry column
 Merg_PRODNn<- Merg_PRODNn[, -c(33)]
 ```
 
 
-# Save data
+##  Save data
 ```{r eval=FALSE, include=TRUE}
-# Write to csv
+# Write merged data to csv file
 write.csv(Merg_PRODNn, "Merg_PRODNn.csv")
-
-# Write to RDS
-saveRDS(Merg_PRODNn, "Merg_PRODNn.rds")
 ```
 

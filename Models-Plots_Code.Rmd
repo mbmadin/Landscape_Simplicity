@@ -21,7 +21,7 @@ library(sjmisc) # for printing model output
 library(sjlabelled) # For printing model output
 library(summarytools) # For summary stats
 library(sjstats) # estimate partial effect size
-library(ggplot2)
+library(tmap) # For plotting map
 library(ggforce)
 library(sf)
 library(extrafont) # Text font type
@@ -38,54 +38,46 @@ Merg_PROD1<- read_csv("~/R01_Course_Files/GRA/Merg_PRODzc.csv")
 ```
 
 
-## Clean the data
+## Pre-clean the data
 
 ```{r}
-# create a new column of management practices as published in Dainese et al. paper
+# create new column of management practices as published in Dainese et al. paper
 Merg_PROD$Manag_Cbin <- Merg_PROD$Manag  
 
-# combined other management practices  into organic or conventional
+# Group management practices  into organic or conventional
 Merg_PROD <- Merg_PROD %>%
   mutate(Manag_Cbin  = ifelse(Manag_Cbin== "Control = monoculture of crop/grasses", "conventional", Manag_Cbin )) %>%
   mutate(Manag_Cbin  = ifelse(Manag_Cbin== "Semi natural habitat lacking a pond", "organic", Manag_Cbin)) %>%
   mutate(Manag_Cbin  = ifelse(Manag_Cbin== "Pond + semi natural habitat", "organic", Manag_Cbin))  
 
 
-# change all management labels to lower case
+# Change all combined management labels to lower case
 Merg_PROD$Manag_Cbin= tolower(Merg_PROD$Manag_Cbin) 
 
-# change all original management labels to lower case
+
+# Change all original management labels to lower case
 Merg_PROD$Manag= tolower(Merg_PROD$Manag) 
 
 # add a column to represent dataset 3 (Pollination) and 4 (Pest control)
-## Sort Pest control dataset first
 Merg_PROD<- Merg_PROD%>%
-  arrange(desc(ES_PestControl))
+  arrange(desc(ES_PestControl)) ## Sort Pest control dataset first
+
+
 ## Add data rows
 Merg_PROD$Study_type<- c(rep("Pest_enemy", 186), rep("Poll_service", 395))
 
-
+# Rename soil texture class column
 Merg_PROD<- Merg_PROD%>%
   rename(Tusda_texcod= Tusda_texCode)
 ```
 
 
-# Summary statistics of categorical variables
-
-```{r}
- # Soil texture classes
-freq(Merg_PROD$Tusda_texnam, report.nas = FALSE, cumul = FALSE, headings= FALSE)
-
-# Original management practices in Danise el ta. data
-freq(Merg_PROD$Manag, report.nas = FALSE, cumul = FALSE, headings= FALSE)
-
-# Combined management practices
-freq(Merg_PROD$Manag_Cbin, report.nas = FALSE, cumul = FALSE, headings= FALSE)
-```
-
-# Models prediction lines
+# The OLS regression models
 
 ## Bi-Linear models
+
+### Yield~ LAND
+
 ```{r}
 # PROD~ Landscape
 Model_lm<- lm(PROD ~ LAND, data = Merg_PROD)
@@ -93,28 +85,50 @@ Model_lm<- lm(PROD ~ LAND, data = Merg_PROD)
 #Print
 tab_model(Model_lm, p.style = "numeric_stars", digits = 4, digits.p = 3, 
           show.se = TRUE, show.ci = 0.90)
+```
 
+
+### Yield~ Pollination
+
+```{r}
 # PROD~ pollination service
 Model_lm<- lm(PROD ~ POLL_IND, data = Merg_PROD)
 
 #Print
 tab_model(Model_lm, p.style = "numeric_stars", digits = 4, digits.p = 3, 
           show.se = TRUE, show.ci = 0.90)
+```
 
-# PROD~ pollination service
+
+
+### Yield~ PestControl
+
+```{r}
+# PROD~ pest control
 Model_lm<- lm(PROD ~ ES_PestControl, data = Merg_PROD)
 
-#Print
+# Print
 tab_model(Model_lm, p.style = "numeric_stars", digits = 4, digits.p = 3, 
           show.se = TRUE, show.ci = 0.90)
 
+```
+
+
+### Pollination~ LAND
+
+```{r}
 # Pollinator~ Landscape
 Model_lm<- lm(POLL_IND ~ LAND, data = Merg_PROD)
 
 #Print
 tab_model(Model_lm, p.style = "numeric_stars", digits = 4, digits.p = 3, 
           show.se = TRUE, show.ci = 0.90)
+```
 
+
+### PestControl~ LAND
+
+```{r}
 # Pest_enemy~ Landscape
 Model_lm<- lm(ES_PestControl ~ LAND, data = Merg_PROD)
 
@@ -124,44 +138,132 @@ tab_model(Model_lm, p.style = "numeric_stars", digits = 4, digits.p = 3,
 ```
 
 
-## Interactive effects of PROD~ landscape and soil texture   
+
+## Interactive models
+
+### Interactive effects of PROD~ landscape and soil texture
+
 ```{r}
-## Interactive effects of soil texture and landscape with weather and management practices
+## Model 2a [Yield]
+
 # Using original management practices in Danise el ta. data
-Model_effects<- lm(PROD~ LAND*Tusda_texnam + AnnualTMax + Precipitation + 
-                     Manag, data= Merg_PROD)
+Model_effects<- lm(PROD~ LAND*Manag + AnnualTMax + Precipitation + 
+                     Tusda_texnam, data= Merg_PROD)
+
+# Print model output
+tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
+          show.se = TRUE, show.ci = 0.90)
+
+
+# Get model AIC
+AIC(Model_effects)
+```
+
+
+
+### Interactive effects of PROD~ landscape and management practices
+
+```{r}
+# Model 2b [Yield]
+
+Model_effects<- lm(PROD~ LAND*Manag + AnnualTMax + Precipitation + 
+                     Tusda_texnam, data= Merg_PROD)
+
+# Print model output
+tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
+          show.se = TRUE, show.ci = 0.90)
+
+#Get model AIC
+AIC(Model_effects)
+```
+
+
+### Interactive effects of PROD~ pollination service and management practices
+
+```{r}
+## Model 2c [Yield]
+
+# Using original management practices 
+Model_effects<- lm(PROD~ POLL_IND*Manag + AnnualTMax + Precipitation + 
+                     Tusda_texnam, data= Merg_PROD)
+
+
+# Print model output
+tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
+          show.se = TRUE, show.ci = 0.90)
+
+
+#Get model AIC
+AIC(Model_effects)
+```
+
+
+
+
+### Interactive effects of PROD~ Natural pest control and management practices 
+```{r}
+# Model 2d [Yield]
+
+Model_effects<- lm(PROD~ ES_PestControl*Manag + AnnualTMax + Precipitation + 
+                     Tusda_texnam, data= Merg_PROD)
+
+
+# Print model output
+tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
+          show.se = TRUE, show.ci = 0.90)
+
+
+#Get model AIC
+AIC(Model_effects)
+```
+
+
+
+### Interactive effects of POLL_IND~ landscape and Management practices
+
+```{r}
+# Model 2e [Pollination]
+
+## Using original management practices in Danise el ta. data
+
+Model_effects<- lm(POLL_IND~ LAND*Manag + AnnualTMax + Precipitation + 
+                     Tusda_texnam, data= Merg_PROD)
+
+
+# Print model output
+tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
+          show.se = TRUE, show.ci = 0.90)
+
+
+#Get model AIC
+AIC(Model_effects)
+```
+
+
+
+### Interactive effects of ES_PestControl~ landscape and management
+
+```{r}
+## Model 2f [Predator [Activity]
+
+# Using original management practices in Danise el ta. data
+Model_effects<- lm(ES_PestControl~ LAND*Manag + AnnualTMax + Precipitation + 
+                     Tusda_texnam, data= Merg_PROD)
 
 tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
           show.se = TRUE, show.ci = 0.90)
 
-# Predicted values (marginal effects) for LAND and Soil model terms
-plot_model(Model_effects, type = "pred", terms = c("LAND", "Tusda_texnam"), 
-           line.size = 1.5)+
-  ggtitle("")+
-  labs(color= "Soil Class")+
-  ylab("Standardized crop yield")+
-  xlab("Standardized % crop field of 1km radius")+
-  scale_linetype_manual(values= c("twodash", "dotted", "solid", "longdash", "dotdash", "dash"))+
-  scale_color_manual(labels= c("Sandy-Clay-Loam", "Clay" , "Sandy-Loam", "Loam", "Sand",
-                               "Loamy-Sand"), values= c("black", "red", "green", "purple",
-                                                               "brown", "blue"))+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-
-# Get model AIC
-AIC(Model_effects)
-
-
-# Save Image
-ggsave("Soil_yieldc.tiff", width = 10, height = 6, units = "in", dpi = 300)
 ```
 
 
+
+## Plots of predicted values
+
+### Model predicted values of crop yields at given landscape simplicity in different soil texture classes (Fig 2.).
+
 ```{r}
-# Predicted values (marginal effects) for LAND and Soil model terms
+# Predicted values (marginal effects) for LAND and Soil model terms 90% CI
+
 plot_model(Model_effects, type = "pred", terms = c("LAND", "Tusda_texnam"), 
            line.size = 1.5, ci.lvl = 0.9)+
   ggtitle("")+
@@ -192,222 +294,11 @@ ggsave("Soil_yield.tiff", width = 10, height = 6, units = "in", dpi = 300)
 
 
 
-## Interactive effects of PROD~ landscape and top soil organic    
-```{r}
-## Interactive effects of soil organic carbon and landscape with weather and management practices
-
-# Using combined management practices 
-Model_effects<- lm(PROD~ LAND*Tsoil_OC + AnnualTMax + Precipitation + 
-                     Manag_Cbin, data= Merg_PROD)
-
-tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
-          show.se = TRUE, show.ci = 0.90)
-
-plot_model(Model_effects, type = "pred", terms = c("LAND", "Tsoil_OC"))+
-  ggtitle("Model predicted values of crop production")+
-  labs(color= "Organic carbon") +
-  ylab("Standardized crop yield")+
-  xlab("Standardized % crop field of 1km radiu")+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-```
-
-## Interactive effects of PROD~ landscape and management practices  
-```{r}
-# Interactive effects of PROD~ landscape and management practices 
-Model_effects<- lm(PROD~ LAND*Manag + AnnualTMax + Precipitation + 
-                     Tusda_texnam, data= Merg_PROD)
-
-tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
-          show.se = TRUE, show.ci = 0.90)
-
-AIC(Model_effects)
-```
-
-
-## Interactive effects of PROD~ pollination service and management practices
-```{r}
-## Interactive effects of pollination service and management practices with weather and soil organic carbon
-
-# Using original management practices 
-Model_effects<- lm(PROD~ POLL_IND*Manag + AnnualTMax + Precipitation + 
-                     Tusda_texnam, data= Merg_PROD)
-
-tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
-          show.se = TRUE, show.ci = 0.90)
-
-plot_model(Model_effects, type = "pred", terms = c("POLL_IND", "Manag_Cbin"))+
-  ggtitle("Model predicted values of crop production")+
-  labs(color= "Management") +
-  ylab("Standardized crop yield")+
-  xlab("Standardized pollination service")+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-
-
-```
-
+### Model predicted values of natural pest control at given landscape simplicity under different management practices (Fig 3.).
 
 ```{r}
-## Interactive effects of pollination service and management practices with weather and soil organic carbon
-
-# Using combined management practices 
-Model_effects<- lm(PROD~ POLL_IND*Manag_Cbin + AnnualTMax + Precipitation + 
-                     Tusda_texnam, data= Merg_PROD)
-
-tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
-          show.se = TRUE, show.ci = 0.90)
-
-plot_model(Model_effects, type = "pred", terms = c("POLL_IND", "Manag_Cbin"))+
-  ggtitle("Model predicted values of crop production")+
-  labs(color= "Management") +
-  ylab("Standardized crop yield")+
-  xlab("Standardized pollination service")+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-
-
-```
-
-
-```{r}
-# Using management practice on x-axis
-plot_model(Model_effects, type = "pred", terms = c("Manag_Cbin", "POLL_IND[-1, 0, 1]"))+
-  ggtitle("Model predicted values of crop production")+
-  labs(color= "Pollination") +
-  ylab("Standardized crop yield")+
-  xlab("Management practices")+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-```
-
-
-## Interactive effects of PROD~ Natural pest control and management practices 
-```{r}
-# Interactive effects of Natural pest control and management practices with weather and soil texture classes
-
- 
-Model_effects<- lm(PROD~ ES_PestControl*Manag + AnnualTMax + Precipitation + 
-                     Tusda_texnam, data= Merg_PROD)
-
-tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
-          show.se = TRUE, show.ci = 0.90)
-```
-
-
-```{r}
-plot_model(Model_effects, type = "pred", terms = c("ES_PestControl", "Manag"))+
-  ggtitle("Model predicted values of crop production")+
-  labs(color= "Management") +
-  ylab("Standardized crop yield")+
-  xlab("Standardized natural enemy activities")+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-```
-
-
-```{r}
-# Using management practice on x-axis
-plot_model(Model_effects, type = "pred", terms = c("Manag_Cbin", "ES_PestControl[-1, 0, 1]"))+
-  ggtitle("Model predicted values of crop production")+
-  labs(color= "Pest control") +
-  ylab("Standardized crop yield")+
-  xlab("Management practices")+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-```
-
-
-## Interactive effects of POLL_IND~ landscape and Management practices
-```{r}
-## Interactive effects of management practices and landscape with weather and soil texture class on pollination
-
-# Using original management practices in Danise el ta. data
-Model_effects<- lm(POLL_IND~ LAND*Manag + AnnualTMax + Precipitation + 
-                     Tusda_texnam, data= Merg_PROD)
-
-tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
-          show.se = TRUE, show.ci = 0.90)
-
-plot_model(Model_effects, type = "pred", terms = c("LAND", "Manag"), 
-           line.size = 1.5, ci.lvl = 0.90)+
-  ggtitle("Model predicted values of pollination service")+
-  labs(color= "Management") +
-  ylab("Standardized pollination service")+
-  xlab("Standardized % crop field of 1km radiu")+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-```
-
-
-```{r}
-# Using management practice on x-axis
-plot_model(Model_effects, type = "pred", terms = c("Manag", "LAND"))+
-  ggtitle("Model predicted values of pollination service")+
-  labs(color= "% Cropfield") +
-  ylab("Standardized pollination service")+
-  xlab(" ")+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-```
-
-
-
-## Interactive effects of ES_PestControl~ landscape and management 
-```{r}
-## Interactive effects of management practices and landscape with weather and soil organic carbon
-
-# Using original management practices in Danise el ta. data
-Model_effects<- lm(ES_PestControl~ LAND*Manag + AnnualTMax + Precipitation + 
-                     Tusda_texnam, data= Merg_PROD)
-
-tab_model(Model_effects, p.style = "numeric_stars", digits = 4, digits.p = 3, 
-          show.se = TRUE, show.ci = 0.90)
-
-```
-
-
-```{r}
-# Model predicted values at 95% CI
-plot_model(Model_effects, type = "pred", terms = c("LAND", "Manag"), 
-           line.size = 1.5, ci.lvl = 0.95)+
-  ggtitle("Model predicted values of natural enemy activities")+
-  labs(color= "") +
-  ylab("Standardized natural enemy activities")+
-  xlab("Standardized % crop field of 1km radius")+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"), 
-        axis.text=element_text(colour = "black"),
-        legend.position = ("top"))
-
 # Model predicted values at 90% CI
+
 plot_model(Model_effects, type = "pred", terms = c("LAND", "Manag"), 
            line.size = 1.5, ci.lvl = 0.90)+
   ggtitle("")+
@@ -435,519 +326,36 @@ plot_model(Model_effects, type = "pred", terms = c("LAND", "Manag"),
 ggsave("Mgmnt_pest.tiff", width = 8, height = 6, units = "in", dpi = 300)
 ```
 
-# Caterpillar plot
 
-## Construct caterpillar plot data
-```{r}
-# Model_1: PROD~ landscape and soil texture model
-Model_effects<- lm(PROD~ LAND*Tusda_texnam + AnnualTMax + Precipitation + 
-                     Manag, data= Merg_PROD)
+## Plot study location
 
-# Get model Beta coefficients
-model_1B<- as.data.frame(Model_effects$coefficients)
+### Data
 
-# Rename columns
-names(model_1B)<- c("B")
-
-# Get variables 
-model_1v<- c("Intercept", "LAND", "Tusda_texnamloam", "Tusda_texnamloamy sandy",
-             "Tusda_texnamsand", "Tusda_texnamsandy clay loam", 
-             "Tusda_texnamsandy loam", "AnnualTMax", "Precipitation", 
-             "Managconventional", "Managorganic", "Managpond + semi natural habitat",
-             "Managsemi natural habitat lacking a pond", "LAND:Tusda_texnamloam",
-             "LAND:Tusda_texnamloamy sandy", "LAND:Tusda_texnamsand",
-             "LAND:Tusda_texnamsandy clay loam", "LAND:Tusda_texnamsandy loam")
-
-# Convert into data frame
-model_1v<- as.data.frame(model_1v)
-
-# Rename columns
-names(model_1v)<- c("Variable")
-
-# Get std error
-model_1Er<- as.data.frame(summary(Model_effects)$coef[,2])
-
-# Rename columns
-names(model_1Er)<- c("StdError")
-
-# Merge B coefficients and variables
-Model_1<- cbind(model_1v, model_1B, model_1Er)
-
-# Add model label
-Model_1$Model<- rep(1, 18)
-```
-
-
-```{r}
-# Model_2: PROD~ landscape and Top soil organic carbon
-Model_effects<- lm(PROD~ LAND*Tsoil_OC + AnnualTMax + Precipitation + 
-                     Manag_Cbin, data= Merg_PROD)
-
-# Get model Beta coefficients
-model_2B<- as.data.frame(Model_effects$coefficients)
-
-# Rename columns
-names(model_2B)<- c("B")
-
-# Get variables 
-model_2v<- c("Intercept", "LAND", "Tsoil_OC", "AnnualTMax",
-             "Precipitation", "Manag_Cbinorganic", "LAND:Tsoil_OC")
-
-# Convert into data frame
-model_2v<- as.data.frame(model_2v)
-
-# Rename columns
-names(model_2v)<- c("Variable")
-
-# Get std error
-model_2Er<- as.data.frame(summary(Model_effects)$coef[,2])
-
-# Rename columns
-names(model_2Er)<- c("StdError")
-
-# Merge B coefficients and variables
-Model_2<- cbind(model_2v, model_2B, model_2Er)
-
-# Add model label
-Model_2$Model<- rep(2, 7)
-```
-
-
-```{r}
-# Model_3: PROD~ pollination service and management practices 
-Model_effects<- lm(PROD~ POLL_IND*Manag_Cbin + AnnualTMax + Precipitation + 
-                     Tusda_texnam, data= Merg_PROD)
-
-# Get model Beta coefficients
-model_3B<- as.data.frame(Model_effects$coefficients)
-
-# Rename columns
-names(model_3B)<- c("B")
-
-# Get variables 
-model_3v<- c("Intercept", "POLL_IND", "Manag_Cbinorganic", "AnnualTMax",
-             "Precipitation", "Tusda_texnamloam", "Tusda_texnamloamy sandy",
-             "Tusda_texnamsand", "Tusda_texnamsandy clay loam", 
-             "Tusda_texnamsandy loam", "POLL_IND:Manag_Cbinorganic")
-
-# Convert into data frame
-model_3v<- as.data.frame(model_3v)
-
-# Rename columns
-names(model_3v)<- c("Variable")
-
-# Get std error
-model_3Er<- as.data.frame(summary(Model_effects)$coef[,2])
-
-# Rename columns
-names(model_3Er)<- c("StdError")
-
-# Merge B coefficients and variables
-Model_3<- cbind(model_3v, model_3B, model_3Er)
-
-# Add model label
-Model_3$Model<- rep(3, 11)
-```
-
-
-```{r}
-# Model_4: PROD~ Natural pest control and management practices 
-Model_effects<- lm(PROD~ ES_PestControl*Manag_Cbin + AnnualTMax + Precipitation + 
-                     Tusda_texnam, data= Merg_PROD)
-
-# Get model Beta coefficients
-model_4B<- as.data.frame(Model_effects$coefficients)
-
-# Rename columns
-names(model_4B)<- c("B")
-
-# Get variables 
-model_4v<- c("Intercept", "ES_PestControl", "Manag_Cbinorganic", "AnnualTMax",
-             "Precipitation", "Tusda_texnamloam", "Tusda_texnamsand", 
-              "Tusda_texnamsandy clay loam", "Tusda_texnamsandy loam",
-             "ES_PestControl:Manag_Cbinorganic")
-
-# Convert into data frame
-model_4v<- as.data.frame(model_4v)
-
-# Rename columns
-names(model_4v)<- c("Variable")
-
-# Get std error
-model_4Er<- as.data.frame(summary(Model_effects)$coef[,2])
-
-# Rename columns
-names(model_4Er)<- c("StdError")
-
-# Merge B coefficients and variables
-Model_4<- cbind(model_4v, model_4B, model_4Er)
-
-# Add model label
-Model_4$Model<- rep(4, 10)
-```
-
-
-```{r}
-# Model_5: POLL_IND~ landscape and Management practices 
-Model_effects<- lm(POLL_IND~ LAND*Manag + AnnualTMax + Precipitation + 
-                     Tusda_texnam, data= Merg_PROD)
-
-# Get model Beta coefficients
-model_5B<- as.data.frame(Model_effects$coefficients)
-
-# Rename columns
-names(model_5B)<- c("B")
-
-# Get variables 
-model_5v<- c("Intercept", "LAND", "Managconventional", "Managorganic",
-             "Managpond + semi natural habitat", 
-             "Managsemi natural habitat lacking a pond", "AnnualTMax", 
-             "Precipitation", "Tusda_texnamloam", "Tusda_texnamloamy sandy", 
-             "Tusda_texnamsand", "Tusda_texnamsandy clay loam", 
-             "Tusda_texnamsandy loam", "LAND:Managconventional", 
-             "LAND:Managorganic", "LAND:Managpond + semi natural habitat",
-             "LAND:Managsemi natural habitat lacking a pond")
-
-# Convert into data frame
-model_5v<- as.data.frame(model_5v)
-
-# Rename columns
-names(model_5v)<- c("Variable")
-
-# Get std error
-model_5Er<- as.data.frame(summary(Model_effects)$coef[,2])
-
-# Rename columns
-names(model_5Er)<- c("StdError")
-
-# Merge B coefficients and variables
-Model_5<- cbind(model_5v, model_5B, model_5Er)
-
-# Add model label
-Model_5$Model<- rep(5, 17)
-```
-
-
-```{r}
-# Model_6: ES_PestControl~ landscape and management 
-Model_effects<- lm(ES_PestControl~ LAND*Manag_Cbin + AnnualTMax + Precipitation + 
-                     Tusda_texnam, data= Merg_PROD)
-
-# Get model Beta coefficients
-model_6B<- as.data.frame(Model_effects$coefficients)
-
-# Rename columns
-names(model_6B)<- c("B")
-
-# Get variables 
-model_6v<- c("Intercept", "LAND", "Manag_Cbinorganic", "AnnualTMax",
-             "Precipitation", "Tusda_texnamloam", "Tusda_texnamsand", 
-              "Tusda_texnamsandy clay loam", "Tusda_texnamsandy loam",
-             "LAND:Manag_Cbinorganic")
-
-# Convert into data frame
-model_6v<- as.data.frame(model_6v)
-
-# Rename columns
-names(model_6v)<- c("Variable")
-
-# Get std error
-model_6Er<- as.data.frame(summary(Model_effects)$coef[,2])
-
-# Rename columns
-names(model_6Er)<- c("StdError")
-
-# Merge B coefficients and variables
-Model_6<- cbind(model_6v, model_6B, model_6Er)
-
-# Add model label
-Model_6$Model<- rep(6, 10)
-```
-
-## Merge data
-```{r }
-# Row bind data
-Merg_Cpillar<- bind_rows(Model_1, Model_2, Model_3, Model_4)
-
-#Export merge data
-saveRDS(Merg_Cpillar, "Merg_Cpillar.rds")
-```
-
-
-## Plot Caterpillar data
-```{r}
-# Model_1
-ggplot(Model_1) + 
-      geom_errorbarh(height = 0.2, aes(xmin = B - StdError, 
-                                     xmax = B + StdError, 
-                                     y = reorder(Variable, desc(B)),
-                                     color= Model, group=Variable)) +
-      geom_point(aes(x = B, y = reorder(Variable, desc(B)), 
-                     color=Model), size = 2) +
-      geom_vline(xintercept = 0) +
-      theme_minimal()+
-      labs(x = "Effect on crop production",
-           y = "")+
-  theme_bw()+
-  theme(legend.position="none", panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-# Model_2
-ggplot(Model_2) + 
-      geom_errorbarh(height = 0.2, aes(xmin = B - StdError, 
-                                     xmax = B + StdError, 
-                                     y = reorder(Variable, desc(B)),
-                                     color= Model, group=Variable)) +
-      geom_point(aes(x = B, y = reorder(Variable, desc(B)), 
-                     color=Model), size = 2) +
-      geom_vline(xintercept = 0) +
-      theme_minimal()+
-    labs(x = "Effect on crop production",
-           y = "")+
-  theme_bw()+
-  theme(legend.position="none", panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-
-# Model_3
-ggplot(Model_3) + 
-      geom_errorbarh(height = 0.2, aes(xmin = B - StdError, 
-                                     xmax = B + StdError, 
-                                     y = reorder(Variable, desc(B)),
-                                     color= Model, group=Variable)) +
-      geom_point(aes(x = B, y = reorder(Variable, desc(B)), 
-                     color=Model), size = 2) +
-      geom_vline(xintercept = 0) +
-      theme_minimal()+
-      labs(x = "Effect on crop production",
-           y = "")+
-  theme_bw()+
-  theme(legend.position="none", panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-
-# Model_4
-ggplot(Model_4) + 
-      geom_errorbarh(height = 0.2, aes(xmin = B - StdError, 
-                                     xmax = B + StdError, 
-                                     y = reorder(Variable, desc(B)),
-                                     color= Model, group=Variable)) +
-      geom_point(aes(x = B, y = reorder(Variable, desc(B)), 
-                     color=Model), size = 2) +
-      geom_vline(xintercept = 0) +
-      theme_minimal()+
-      labs(x = "Effect on crop production",
-           y = "")+
-  theme_bw()+
-  theme(legend.position="none", panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-
-# Model_5
-ggplot(Model_5) + 
-      geom_errorbarh(height = 0.2, aes(xmin = B - StdError, 
-                                     xmax = B + StdError, 
-                                     y = reorder(Variable, desc(B)),
-                                     color= Model, group=Variable)) +
-      geom_point(aes(x = B, y = reorder(Variable, desc(B)), 
-                     color=Model), size = 2) +
-      geom_vline(xintercept = 0) +
-      theme_minimal()+
-      labs(x = "Effect on crop production",
-           y = "")+
-  theme_bw()+
-  theme(legend.position="none", panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-
-
-# Model_6
-ggplot(Model_6) + 
-      geom_errorbarh(height = 0.2, aes(xmin = B - StdError, 
-                                     xmax = B + StdError, 
-                                     y = reorder(Variable, desc(B)),
-                                     color= Model, group=Variable)) +
-      geom_point(aes(x = B, y = reorder(Variable, desc(B)), 
-                     color=Model), size = 2) +
-      geom_vline(xintercept = 0) +
-      theme_minimal()+
-      labs(x = "Effect on crop production",
-           y = "")+
-  theme_bw()+
-  theme(legend.position="none", panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-```
-
-
-## Plot caterpillar merge data
-```{r}
-# All models
-ggplot(Merg_Cpillar) + 
-      geom_errorbarh(height = 0.2, aes(xmin = B - StdError, 
-                                     xmax = B + StdError, 
-                                     y = reorder(Variable, desc(B)),
-                                     color= as.factor(Model), group=Variable)) +
-      geom_point(aes(x = B, y = reorder(Variable, desc(B)), 
-                     color= as.factor(Model)), size = 2) +
-      geom_vline(xintercept = 0, linetype= 2) +
-      theme_minimal()+
-      labs(x = "Effect on crop production",
-           y = "", color= "Model")+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-```
-
-
-```{r}
-# All models 
-ggplot(Merg_Cpillar) + 
-      geom_errorbarh(height = 0.2, aes(xmin = B - StdError, 
-                                     xmax = B + StdError, 
-                                     y = reorder(Variable, desc(B)),
-                                     color= Model, group=Variable)) +
-      geom_point(aes(x = B, y = reorder(Variable, desc(B)), 
-                     color= Model), size = 2) +
-      geom_vline(xintercept = 0, linetype= 2) +
-      theme_minimal()+
-      labs(x = "Effect on crop production",
-           y = "", color= "Model")+
-  scale_color_continuous(type = "viridis")+
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black"))
-```
-
-# NLA Model with non-linear interactions
-
-```{r}
-orig <- Merg_PROD #read in the data
- 
- 
-  ivars <- c("LAND", "Precipitation", 
-             "AnnualTMax", "AnnualTMin", 
-             "AnnualTMaxMax", "AnnualTMinMin", 
-             "Tsoil_OC", "Ssoil_OC", 
-             "POLL_IND", "ES_PestControl", 
-             "ABU", "RIC", "EVE", 
-             "ABUwp", "RICwp", "EVEwp")
-  
-  prep <- orig %>% mutate_at(ivars, ~inla.group(., n = 20, method = "quantile")) %>%   
-    mutate(logProd = log(PROD + abs(min(orig$PROD)))) %>% mutate(rev_LAND = -1*LAND) %>%
-    mutate(soil_id = ifelse(Tusda_texcod == 9, 1,
-                            ifelse(Tusda_texcod == 13, 2,
-                                   ifelse(Tusda_texcod == 11, 3,
-                                          ifelse(Tusda_texcod == 10, 4,
-                                                 ifelse(Tusda_texcod == 12, 5,6))))))
-  
-  
-  saveRDS(prep,paste0("prepped_data.rds"))
-
-# For logProd 
-  
-f7 <- logProd ~  1 + 
-      f(Precipitation, model="rw1",scale.model=T, hyper = list (theta = list(prior="pc.prec",param=c(v,0.01)))) + 
-      f(AnnualTMaxMax, model="rw1",scale.model=T, hyper = list (theta = list(prior="pc.prec",param=c(v,0.01))))  + 
-      f(rev_LAND, model="rw1", scale.model=T,  hyper = list (theta = list(prior="pc.prec",param=c(v,0.01)))) +
-      f(Tusda_texnam) + f(Manag) 
-
-
-
-  v=sd(prep$logProd[!is.infinite(prep$logProd)], na.rm=TRUE)/0.31
-   
-  m7<- inla(f7, data=prep[!is.infinite(prep$logProd),] %>% filter(soil_id %in% c(5,6,2)), family = "gaussian",     
-            control.predictor = list( compute=TRUE), 
-            control.compute=list(dic=TRUE, cpo=TRUE), 
-            control.fixed = list(prec = 0.0000001)) 
-
-  saveRDS(m7, "logprod7.rds")
-  
-  summary(m7)
-  
-  
-  ggplot(data=m7$summary.random$rev_LAND[ ,c(1,4,5,6)], aes (x=ID, y=`0.5quant`)) + 
-    geom_ribbon(aes(x=ID,ymin = `0.025quant`, ymax = `0.975quant`), alpha=0.25) + 
-    geom_point(aes(x=ID,y = `0.5quant`), size = 1) +
-  ggtitle("Landscape simplification and crop production")+
-   xlab("-LAND") + ylab("Estimated Effect on logPROD")+
-    theme_minimal()+ 
-    theme(legend.position="bottom")+ 
-  theme_bw()+
-  theme(panel.border = element_blank(), 
-                        panel.grid.major = element_blank(), 
-                        panel.grid.minor = element_blank(),
-                        axis.line = element_line(colour = "black")) 
-```
-
-# Plot study location
-## Data
 ```{r}
 # Import data
-Merg_PRODL<- read_csv("~/R01_Course_Files/GRA/Merg_PROD.csv")
 
-World<- st_read("~/R01_Course_Files/GRA/World_Countries__Generalized_.shp")
-
-# Make sf data frame
-MergPROD_sf<- st_as_sf(Merg_PRODL, coords = c("X", "Y"), crs= 4326)%>% 
-  mutate(X= Merg_PROD$X,
-         Y= Merg_PROD$Y)
-
-# Regions Area and Length
-Areas_Regions <- read_excel("C:/Users/madin/OneDrive - Kansas State University/Madin/Landscape Data/Scripts/Areas_Regions.xlsx")
-
-# Regions location
-Location1<- st_read("~/R01_Course_Files/Cities_Update.shp")
-
-# Combine data
-LocationsR<- left_join(Areas_Regions, Location1, by= ("Name"))%>%
-  rename(Region_radius= length_M)
-  
-# rearrange columns
-LocationsR<- LocationsR[, c(1, 2, 5, 3, 4, 6, 7, 8)]
-
-# Convert into sf dataframe
+## Convert into sf dataframe
 LocationsR_sf<- st_as_sf(LocationsR, coords = c("X", "Y"), crs= 4326)
 
-# Add study type [Pest control]
+## Add study type [Pest control]
 MergPROD_sf1<- MergPROD_sf %>% filter(is.na(POLL_IND))%>% 
   mutate(Study_type= "Pest_enemy")
 
-# Add study type [Pollination]
+## Add study type [Pollination]
 MergPROD_sf2<- MergPROD_sf %>% filter(!is.na(POLL_IND))%>% 
   mutate(Study_type= "Poll_service")
 
+## Bind data
 MergPROD_sf<- rbind(MergPROD_sf1, MergPROD_sf2)
-```
 
-## Colored Background
-```{r}
-tm_shape(World) +
-   tm_polygons("COUNTRY", midpoint = NA, 
-               title = "Countries", legend.show = FALSE)+ 
-   tm_shape(MergPROD_sf) +
-   tm_dots("Study_type", size = 0.3, shape = 19, 
-           title = "Crop fields", labels = c("Pest enemy" ,"Pollination"),
-           palette = c("brown", "black"))+
-  tm_shape(LocationsR_sf) +
-  tm_dots("Region_radius", size = "Region_radius", shape = 1, col = "red", 
-          title = "Region radius")+
-   tm_layout(legend.outside = FALSE, legend.position = c("left", "center"))
 
+## Load world countries shapefile
+World<- st_read("~/R01_Course_Files/GRA/World_Countries__Generalized_.shp")
 ```
 
 
-## Without Colored Background
+
+###  Distribution of reanalyzed crop field data. (Fig. 1)
 ```{r}
 tm_shape(World) +
    tm_polygons(col = NA, midpoint = NA, 
@@ -960,17 +368,6 @@ tm_shape(World) +
 
 ```
 
-```{r}
-tm_shape(World) +
-   tm_polygons(col = NA, midpoint = NA, 
-               title = "Countries", legend.show = FALSE)+ 
-   tm_shape(MergPROD_sf, projection = "Mollweide") +
-  tm_basemap()+
-   tm_dots("Study_type", size = 0.3, shape = 19, 
-           title = "Crop fields", labels = c("Pest Control" ,"Pollination"),
-           palette = c("brown", "black"))+
-   tm_layout(legend.outside = FALSE, legend.position = c("left", "center"))
-```
 
 
 ### Save Map
@@ -978,34 +375,3 @@ tm_shape(World) +
 # Write to tiff
 tmap_save(maps, "Context_Map.tiff", width = 8, height = 6, units = "in", dpi=300)
 ```
-
-
-## Only study regions
-```{r}
-tm_shape(World) +
-   tm_polygons(col = NA, midpoint = NA, 
-               title = "Countries", legend.show = FALSE)+ 
-  tm_shape(LocationsR_sf) +
-  tm_dots("Region_radius", size = "Region_radius", shape = 1, col = "red", 
-          title = "Region radius")+
-   tm_layout(legend.outside = FALSE, legend.position = c("left", "center"))
-
-```
-
-## Supplementary Data
-```{r}
-# Get extracted climate and soil data
-Merg_SupData<- Merg_PROD%>%
-  select(SiteID, StudyYear, Region, Precipitation:Tusda_texnam)
-
-# Get coordinate locations
-Merg_PRODLo<- Merg_PRODL%>%
-  select(SiteID,  X, Y)
-
-# Merged extracted climate and soil data with coords
-Merg_SupData1<- left_join(Merg_SupData, Merg_PRODLo, by= c("SiteID"))
-  
-# Save Supplementary Data
-write_sf(Merg_SupData1, 'Merg_SupData.csv')
-```
-

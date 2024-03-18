@@ -22,33 +22,25 @@ library(sjlabelled) # For printing model output
 library(summarytools) # For summary stats
 library(sjstats) # estimate partial effect size
 library(ggplot2)
-library(readxl)
-library(tmap) #Thematic mapper
-library(INLA) # For Bayesian modeling using integrated nested laplace approximations
 library(ggforce)
 library(sf)
 library(extrafont) # Text font type
 library(MASS) # for ordered Probit Model ('polr()')
-
-install.packages("INLA", repos=c(getOption("repos"), INLA="https://inla.r-inla-download.org/R/testing"), dep=TRUE)
 ```
 
 # Import files
 
-merged  production data from Combined pest and pollinator agricultural data (Dainese), climate (WorldClim), and soil (World Harmonized Soil Dataset) data
+Load merged data comprising production data from Combined pest and pollinator agricultural data (Dainese), climate (WorldClim), and soil (World Harmonized Soil Dataset) data
+
 ```{r eval=FALSE, include=FALSE}
-# merged  production data from Combined pest and pollinator agricultural data (Dainese), climate (WorldClim), and soil (World Harmonized Soil Dataset) data
-
-
 # Import Old transformed production dataset by crop type
 Merg_PROD1<- read_csv("~/R01_Course_Files/GRA/Merg_PRODzc.csv")
 ```
 
 
-```{r}
-# Import New transformed production dataset by crop type 
-Merg_PROD<- read_csv("Merg_PRODNzc.csv")
+## Clean the data
 
+```{r}
 # create a new column of management practices as published in Dainese et al. paper
 Merg_PROD$Manag_Cbin <- Merg_PROD$Manag  
 
@@ -77,7 +69,8 @@ Merg_PROD<- Merg_PROD%>%
   rename(Tusda_texcod= Tusda_texCode)
 ```
 
-# Summary statistics of categorical variables
+# 
+Summary statistics of categorical variables
 ```{r}
  # Soil texture classes
 freq(Merg_PROD$Tusda_texnam, report.nas = FALSE, cumul = FALSE, headings= FALSE)
